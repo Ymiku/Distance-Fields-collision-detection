@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public interface IStaticObstacle {
-	float ClosestDisOnBounds(Vector2 v);
+public interface IObstacle {
+	float ClosestDisOnBounds(Vector2 v,bool debug = false);
+	float GetSqrRange ();
+	Vector2 GetOri ();
 }

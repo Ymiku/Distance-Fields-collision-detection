@@ -7,9 +7,13 @@ public class DistanceFields : UnitySingleton<DistanceFields> {
 	public float radius;
 	public int samplesPerUnit = 20;
 	public int fieldLength;
+	public bool isVisual = true;
 	public SpriteRenderer visual;
 	public float[,] fieldsMap;
-	public List<IStaticObstacle> staticObstacleList = new List<IStaticObstacle> ();
+	public List<IObstacle> staticObstacleList = new List<IObstacle> ();
+	public List<IObstacle> dynamicObstacleList = new List<IObstacle> ();
+	public List<IObstacle> activeObstacleList = new List<IObstacle> ();
+	public IObstacle selfObs=null;
 	private float delta;
 	// Use this for initialization
 	void Start () {
@@ -22,19 +26,27 @@ public class DistanceFields : UnitySingleton<DistanceFields> {
 		fieldsMap = new float[mapLength,mapLength];
 		Texture2D tex2D = new Texture2D (mapLength*samplesPerUnit,mapLength*samplesPerUnit,TextureFormat.ARGB32,false);
 		float color;
-		for (int col = 0; col < mapLength; col++) {
-			for (int cul = 0; cul < mapLength; cul++) {
-				color = fieldsMap [cul, col] = CalculateDis (new Vector2(originPoint.x+cul*delta,originPoint.y+col*delta));
-				tex2D.SetPixel (cul,col,new Color(color,color,color));
+		if (isVisual) {
+			for (int col = 0; col < mapLength; col++) {
+				for (int cul = 0; cul < mapLength; cul++) {
+					color = fieldsMap [cul, col] = CalculateDis (new Vector2 (originPoint.x + cul * delta, originPoint.y + col * delta));
+					tex2D.SetPixel (cul, col, new Color (color, color, color));
+				}
+			}
+			tex2D.Apply ();
+			Sprite sprite = Sprite.Create (tex2D, new Rect (0, 0, mapLength, mapLength), Vector2.one * 0.5f);
+			visual.sprite = sprite;
+		} else {
+			for (int col = 0; col < mapLength; col++) {
+				for (int cul = 0; cul < mapLength; cul++) {
+					fieldsMap [cul, col] = CalculateDis (new Vector2 (originPoint.x + cul * delta, originPoint.y + col * delta));
+				}
 			}
 		}
-		tex2D.Apply ();
-		Sprite sprite = Sprite.Create (tex2D,new Rect(0,0,mapLength,mapLength),Vector2.one*0.5f);
-		visual.sprite = sprite;
 	}
 	public float QueryWorld(Vector2 worldPos)
 	{
-		return 1f-GetPixelBilinear (worldPos)*radius;
+		return (1f-GetPixelBilinear (worldPos))*radius;
 	}
 	public Vector2 QueryNormal(Vector2 worldPos)
 	{
@@ -60,17 +72,35 @@ public class DistanceFields : UnitySingleton<DistanceFields> {
 		y2= Mathf.Clamp (y2,0,fieldLength*samplesPerUnit-1);
 		float lerpx1 = fieldsMap [x, y]*(x2-fx) + fieldsMap [x + 1, y]*(fx-x);
 		float lerpx2 = fieldsMap [x, y+1]*(x2-fx) + fieldsMap [x + 1, y+1]*(fx-x);
-		return lerpx1*(y2-fy)+lerpx2*(fy-y);
+		float staticFinal = lerpx1*(y2-fy)+lerpx2*(fy-y);
+
+		return Mathf.Max(staticFinal,GetDynamic(pos));
+	}
+	public float GetDynamic(Vector2 pos)
+	{
+		float max = 0f;
+		float temp;
+		for (int i = 0; i < activeObstacleList.Count; i++) {
+			temp = 1f - Mathf.Min (activeObstacleList [i].ClosestDisOnBounds (pos,true), radius) / radius;
+			max = Mathf.Max (temp,max);
+		}
+		return max;
 	}
 	public Vector2 Move(Vector2 ori,float rad,Vector2 dir)
 	{
+		activeObstacleList.Clear ();
+		for (int i = 0; i < dynamicObstacleList.Count; i++) {
+			if ((dynamicObstacleList [i].GetOri () - ori).sqrMagnitude <= dynamicObstacleList [i].GetSqrRange () + rad * rad + dir.sqrMagnitude+1f) {
+				activeObstacleList.Add (dynamicObstacleList [i]);
+			}
+		}
 		Vector2 newPos = ori + dir;
 		float dist = 0f;
 		for (int i = 0; i < 3; i++) {
 			dist = QueryWorld(newPos);
 			if (dist >= rad)
 				break;
-			newPos += QueryNormal (newPos)*(rad-dist);
+			newPos = ori + MathExtra.FastNormalize(newPos+QueryNormal (newPos)*(rad-dist)-ori)*4f*Time.deltaTime;
 		}
 		if(Vector2.Dot(newPos-ori,dir)<0f)
 			return ori;
