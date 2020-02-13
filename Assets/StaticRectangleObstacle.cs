@@ -23,7 +23,7 @@ public class StaticRectangleObstacle : MonoBehaviour,IStaticObstacle {
 	/// <summary>
 	/// 在预计算中获取点到碰撞体的最近距离
 	/// </summary>
-	public float ClosestDisOnBounds(Vector2 point)
+	public float ClosestDisOnBounds(Vector2 point,bool debug = false)
 	{
 		transform.localScale = Vector3.one;
 		Vector2 _point = (Vector2)transform.InverseTransformPoint(new Vector3(point.x,point.y,0f));
@@ -35,4 +35,12 @@ public class StaticRectangleObstacle : MonoBehaviour,IStaticObstacle {
 		u = new Vector2 (Mathf.Max(u.x,0f),Mathf.Max(u.y,0f));
 		return MathExtra.GetV2L (u);
 	}
+    public float GetSqrRange()
+    {
+        return Mathf.Sqrt(width*width+height*height);
+    }
+    public Vector2 GetOri()
+    {
+        return (Vector2)transform.position;
+    }
 }
